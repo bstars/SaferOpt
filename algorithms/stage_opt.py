@@ -49,9 +49,16 @@ class StageOpt(GPOpt):
 		"""
 		super().__init__(xs, ys, parameter_set, fmin, beta, kernel=kernel)
 		self.lipschitz = lipschitz
-		self.S = np.zeros([parameter_set.shape[0]], dtype=bool)
+		# self.S = np.zeros([parameter_set.shape[0]], dtype=bool)
+		self.S = np.all(
+			self.Q[:, ::2] >= self.fmin, axis=1
+		)
 		self.G = self.S.copy()  # possible expanders
 		self.M = self.S.copy()  # possible maximizers
+		self.d = cdist(
+			self.parameter_set,
+			self.parameter_set
+		)
 
 		self.use_lipschitz = False if self.lipschitz is None else True
 		self.explore_threshold = explore_threshold
@@ -69,22 +76,26 @@ class StageOpt(GPOpt):
 			But we also implement the Lipschitz version here.
 		"""
 		if self.use_lipschitz:
-			d = cdist(
-				self.parameter_set,
-				self.parameter_set
-			)
-			S = np.zeros_like(self.S, dtype=bool)
+			d = self.d
+			# S = np.zeros_like(self.S, dtype=bool)
+			S = np.ones_like(self.S, dtype=bool)
 
 			for i in range(len(self.gps)):
-				S = np.logical_or(
+				# S = np.logical_or(
+				# 	S,
+				# 	np.any(self.Q[:, 2 * i] - self.lipschitz[i] * d > self.fmin[i], axis=1)
+				# )
+
+				S = np.logical_and(
 					S,
-					np.any(self.Q[:, 2 * i] - self.lipschitz[i] * d > self.fmin[i], axis=1)
+					np.any(self.Q[self.S, 2 * i][None,:] - self.lipschitz[i] * d[:,self.S] > self.fmin[i], axis=1)
 				)
 			self.S = S
 		else:
 			self.S = np.all(
 				self.Q[:, ::2] >= self.fmin, axis=1
 			)
+
 
 	def compute_set(self):
 		self.compute_safe_set()
@@ -114,6 +125,9 @@ class StageOpt(GPOpt):
 		# possible expanders
 		G_safe = np.zeros_like(self.S, dtype=bool)
 		for idx in np.where(s)[0]:
+
+			if np.all(np.abs(self.Q[idx, 1::2] - self.Q[idx, ::2]) / 2 < self.explore_threshold):
+				continue
 
 			# https://github.com/vzhuang/StageOpt/blob/main/gp_opt.py#L548
 			if self.use_lipschitz:

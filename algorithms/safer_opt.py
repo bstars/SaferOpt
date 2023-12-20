@@ -1,4 +1,5 @@
 import sys
+
 sys.path.append('..')
 
 import numpy as np
@@ -8,11 +9,13 @@ from algorithms.bayesian_opt import UCB
 from utils.utilities import array_to_tensor, tensor_to_array
 from utils.config import Config
 
+
+
 class SaferOpt():
 	def __init__(self,
-	             xs:np.array,
-	             ys:np.array,
-	             parameter_set:np.array,
+	             xs: np.array,
+	             ys: np.array,
+	             parameter_set: np.array,
 	             fmin,
 	             beta,
 	             aq_func=UCB(),
@@ -55,7 +58,8 @@ class SaferOpt():
 		self.compute_set()
 
 	@property
-	def t(self): return self.xs.shape[0]
+	def t(self):
+		return self.xs.shape[0]
 
 	def compute_set(self):
 		Q = np.zeros(
@@ -73,6 +77,11 @@ class SaferOpt():
 		)
 
 	def propose_evaluation(self):
+
+		if not np.any(self.S):
+			idx = np.argmax(self.Q[:, 1])
+			return idx, self.parameter_set[idx]
+
 		l = self.Q[self.S, 0]
 		u = self.Q[self.S, 1]
 		mu = (l + u) / 2
@@ -87,6 +96,8 @@ class SaferOpt():
 		:param y: [num_pts, num_func]
 		:return:
 		"""
+		x = np.atleast_2d(x)
+		y = np.atleast_2d(y)
 		self.xs = np.concatenate([self.xs, x], axis=0)
 		self.ys = np.concatenate([self.ys, y], axis=0)
 		[
@@ -100,6 +111,3 @@ class SaferOpt():
 			for i, rr in enumerate(self.rrs)
 		]
 		self.compute_set()
-
-
-

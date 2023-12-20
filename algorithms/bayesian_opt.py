@@ -89,38 +89,32 @@ class EpsGreedy(AcquisitionFunction):
 		ps += eps * stds / np.sum(stds)
 		return int(np.random.choice(np.arange(len(mean)), p=ps))
 
-class YananStrategy(AcquisitionFunction):
-	def __init__(self, explore_threshold=0.1):
-		super().__init__()
-		self.explore_threshold = explore_threshold
-
-	def __call__(self, mean, std, **kwargs):
-		if np.all(2 * std < self.explore_threshold):
-			return np.argmax(mean + std)
-		else:
-			return np.argmax(std)
 
 class BayesianOpt(GPOpt):
 	"""
 	Bayesian Optimization with Gaussian Process and custom acquisition function.
 
 	By default this considers safety constraint,
-	if no safety constraint for ith function, just set fmin[i] = -np.inf
+	if no safety constraint for i-th function, just set fmin[i] = -np.inf
 	"""
+
 	def __init__(self,
-	             xs:np.array,
-	             ys:np.array,
-	             parameter_set:np.array,
+	             xs: np.array,
+	             ys: np.array,
+	             parameter_set: np.array,
 	             fmin,
 	             beta,
 	             kernel=None,
-	             aq_func: AcquisitionFunction = UCB()):
-		super().__init__(xs, ys, parameter_set, fmin, beta, kernel)
+	             aq_func: AcquisitionFunction = UCB(),
+	             noise_var = Config.gp_noise_var):
+		super().__init__(xs, ys, parameter_set, fmin, beta, kernel, noise_var)
 		self.S = None
 		self.aq_func = aq_func
 
-		self.name = 'GP_' + self.kernel.name + "+" + ('' if np.all(np.array(fmin) == -np.inf) else 'Constrained') + aq_func.name
+		self.name = 'GP_' + self.kernel.name + "+" + (
+			'' if np.all(np.array(fmin) == -np.inf) else 'Constrained') + aq_func.name
 		self.compute_safe_set()
+
 	def propose_evaluation(self):
 		Q = self.Q
 
@@ -130,13 +124,13 @@ class BayesianOpt(GPOpt):
 		S = self.S
 
 		if len(S) == 0:
-			idx = np.argmax(Q[:,1])
+			idx = np.argmax(Q[:, 1])
 			return idx, self.parameter_set[idx]
 
 		mus = 0.5 * (Q[S, 0] + Q[S, 1])
 		stds = 0.5 * (Q[S, 1] - Q[S, 0])
 		idx = self.aq_func(
-			mus, stds, r_best=np.max(self.ys[:,0]), t=self.t
+			mus, stds, r_best=np.max(self.ys[:, 0]), t=self.t
 		)
 		idx = np.where(S)[0][idx]
 		return idx, self.parameter_set[idx]
@@ -145,7 +139,7 @@ class BayesianOpt(GPOpt):
 		self.Q = self.confidence_interval()
 		self.S = np.all(self.Q[:, ::2] > self.fmin, axis=1)
 
-
 	def add_new_data_point(self, x, y):
+		# recompute the safe set after adding a new data point
 		super().add_new_data_point(x, y)
 		self.compute_safe_set()

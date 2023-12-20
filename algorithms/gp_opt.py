@@ -9,15 +9,21 @@ from scipy.special import expit
 
 from utils.config import Config
 
+
 class GPOpt(object):
 	def __init__(self,
-	             xs:np.array,
+	             xs: np.array,
 	             ys:np.array,
 	             parameter_set:np.array,
 	             fmin,
 	             beta,
-	             kernel=None):
+	             kernel=None,
+	             noise_var=Config.gp_noise_var):
 		"""
+
+		A class for GP optimization.
+		Most of the code is taken from https://github.com/befelix/SafeOpt
+
 		:param xs:
 			np.array, [num_seed, dim]
 			Seed set points
@@ -30,19 +36,23 @@ class GPOpt(object):
 		:param fmin:
 			np.array or list, [num_func]
 			Threshold for each function.
-			If no threshold considered for ith function, fmin[i] = -np.inf
-		:param beta: float or callable
-		:param kernel: kernel for
+			If no threshold considered for the i-th function, fmin[i] = -np.inf
+		:param beta:
+			float or callable
+			Scheduling for confidence interval
+		:param kernel: kernel for GP
 		"""
-		assert len(fmin) == ys.shape[1]
 
-		if kernel is None: kernel = GPy.kern.RBF(xs.shape[1])
+		if kernel is None:
+			kernel = GPy.kern.RBF(xs.shape[1])
+
 		self.kernel = kernel
 
 		self.gps = []
 		for i in range(ys.shape[1]):
 			self.gps.append(
-				GPy.models.GPRegression(xs, ys[:, i][:,None], kernel=kernel.copy(), noise_var=Config.gp_noise_var)
+				GPy.models.GPRegression(xs, ys[:, i][:, None], kernel=kernel.copy(), noise_var=noise_var,
+				                        normalizer=False)
 			)
 
 		self.fmin = fmin
@@ -50,12 +60,23 @@ class GPOpt(object):
 		self.parameter_set = parameter_set
 		self.xs = xs
 		self.ys = ys
+
+		# Q[:, ::2] is the lower bound
+		# Q[:, 1::2] is the upper bound
 		self.Q = self.confidence_interval()
 
 	@property
-	def t(self): return self.xs.shape[0]
+	def t(self):
+		return self.xs.shape[0]
 
 	def confidence_interval(self):
+		"""
+		Compute the confidence interval for each function at each point in the parameter set
+		and update the Q matrix
+		Q[:, ::2] is the lower bound
+		Q[:, 1::2] is the upper bound
+		"""
+
 		Q = np.zeros([
 			len(self.parameter_set), 2 * len(self.gps)
 		])
@@ -87,7 +108,7 @@ class GPOpt(object):
 		self.xs = np.concatenate([self.xs, x], axis=0)
 		self.ys = np.concatenate([self.ys, y], axis=0)
 		for i, gp in enumerate(self.gps):
-			self._add_data_to_gp(gp, x, y[:, i][:,None])
+			self._add_data_to_gp(gp, x, y[:, i][:, None])
 		self.Q = self.confidence_interval()
 
 	def remove_last_data_point(self):
@@ -96,5 +117,3 @@ class GPOpt(object):
 		for gp in self.gps:
 			self._remove_last_data_from_gp(gp)
 		self.Q = self.confidence_interval()
-
-
