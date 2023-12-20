@@ -4,9 +4,13 @@ sys.path.append('..')
 import numpy as np
 import torch
 from torch import nn
+import pandas as pd
+import numpy as np
+from scipy.sparse import csr_matrix
 import GPy
-import matplotlib.pyplot as plt
 from sklearn.metrics import pairwise_distances
+import matplotlib.pyplot as plt
+from scipy.sparse.linalg import svds
 from utils.config import Config
 
 class BBFunction():
@@ -63,8 +67,8 @@ class NNRandomFunction(BBFunction):
 			ys = torch.from_numpy(ys).float()
 
 			loss = nn.MSELoss()
-			optimizer = torch.optim.Adam(self.nn.parameters(), lr=1e-3)
-			for i in range(10000):
+			optimizer = torch.optim.Adam(self.nn.parameters(), lr=1e-3, weight_decay=1e-7)
+			for i in range(5000):
 				optimizer.zero_grad()
 				y_pred = self.nn(xs)
 				output = loss(y_pred[:, 0], ys)
@@ -81,24 +85,32 @@ class NNRandomFunction(BBFunction):
 			self.f[i] for i in idx
 		])
 
+class Zinc(BBFunction):
+	def __init__(self):
+		super().__init__()
+		self.zinc = pd.read_csv('../zinc/zinc_subsample.csv')
+		cols = [
+		        'penalized_logP',
+				'qed',
+		        # 'exact_mol_wt',
+		        'fp_density_morgan_1',
+		        'fp_density_morgan_2',
+		        'fp_density_morgan_3',
+		        'heavy_atom_mol_wt',
+		        'max_abs_partial_charge',
+		        'max_partial_charge',
+		        'min_partial_charge',
+		        'mol_weight',
+		        'num_valence_electons']
+		self.zinc = self.zinc[cols].to_numpy()
+		self.Y = self.zinc[:, :2]
+		self.X = self.zinc[:, 2:]
 
-if __name__ == '__main__':
-	# parameter_set = np.linspace(-5, 5, 100)[:,None]
-	# kernel = GPy.kern.Matern32(1)
-	# f = GPRandomFunction(parameter_set, kernel)
-	# plt.plot(parameter_set, f.f)
-	# plt.show()
-
-	# print(f(parameter_set))
-	# print(f(parameter_set))
-
-	fun = NNRandomFunction(
-		dim=1,
-		xrange=np.linspace(-5, 5, 500),
-		yrange=np.array([-5, 5]),
-		nn_dim=[1, 4, 8, 16, 8, 4, 1],
-		act=nn.LeakyReLU,
-		ckpt=None
-	)
-	plt.plot(fun.xrange[:, 0], fun.f)
-	plt.show()
+		# compute lipschitz constant for SafeOpt and StageOpt
+		d = pairwise_distances(self.X, self.X)
+		idx = np.tril_indices(len(self.X), k=-1)
+		dy1 = self.Y[:, 0][:, None] - self.Y[:, 0][None, :]
+		dy2 = self.Y[:, 1][:, None] - self.Y[:, 1][None, :]
+		L1 = np.max(np.abs(dy1[idx] / d[idx]))
+		L2 = np.max(np.abs(dy2[idx] / d[idx]))
+		self.L = np.array([L1, L2])
