@@ -19,7 +19,7 @@ from algorithms.bayesian_opt import BayesianOpt, DynamicUCB, ExpectedImprovement
 
 from utils.bb_function import NNRandomFunction
 from utils.config import Config
-from experiments.run_opt import run_experiment
+from experiments.run_opt_1d import run_experiment_1d
 
 
 opts = [
@@ -32,11 +32,11 @@ opts = [
 def experiment_one_pwa_function(pwa_function = 0):
 	num_trials = 5
 	threshold = 0.
-	num_seed = 15
+	num_seed = 2 # 15
 	steps = 150
 	# nn_function = 0
-	# beta = lambda t: 1 / np.log(t / 10 + 2)
-	beta = 2.
+	beta = lambda t: 1 / np.log(t / 10 + 2)
+	# beta = 2.
 
 	xs = np.linspace(Config.xrange[0], Config.xrange[1], Config.xrange[2])
 	truef = NNRandomFunction(
@@ -47,6 +47,7 @@ def experiment_one_pwa_function(pwa_function = 0):
 		act=nn.LeakyReLU,
 		ckpt=None
 	)
+	torch.save(truef.nn.state_dict(), '../nns/%d.pth' % pwa_function)
 	ys = truef.f
 
 	L = np.max(np.abs(
@@ -64,6 +65,9 @@ def experiment_one_pwa_function(pwa_function = 0):
 			)[0],
 			size=num_seed, replace=False
 		)
+
+		# if num_seed == 1:
+		# 	seed_set_idx = np.array(seed_set_idx)
 
 		opts = [
 			# simplest bayesian optimization without any constraints
@@ -114,19 +118,19 @@ def experiment_one_pwa_function(pwa_function = 0):
 		]
 
 		for opt in opts:
-			run_experiment(
+			run_experiment_1d(
 				xs,
 				ys,
 				opt,
 				steps,
-				save_path='./results/nn_pwa/%d/%s/trial_%d' % (pwa_function, opt.name, i),
+				save_path='./results_single/nn_pwa/%d/%s/trial_%d' % (pwa_function, opt.name, i),
 			)
 
 def statistics():
 	dict = {opt:[] for opt in opts}
 
-	for func_id in range(1):
-		path = './results/nn_pwa/%d' % func_id
+	for func_id in range(5):
+		path = './results_single/nn_pwa/%d' % func_id
 		for opt in opts:
 			for trial in range(5):
 				result = loadmat(os.path.join(path, opt, 'trial_%d' % trial, 'result.mat'))
@@ -149,7 +153,7 @@ def statistics():
 		)
 
 	plt.legend()
-	plt.savefig('./results/nn_pwa/avgall.png')
+	plt.savefig('./results_single/nn_pwa/avgall.png')
 	plt.close()
 
 	for opt in opts:
@@ -162,11 +166,11 @@ def statistics():
 
 		plt.scatter(r, v, label=opt)
 	plt.legend()
-	plt.savefig('./results/nn_pwa/avgall_2d.png')
+	plt.savefig('./results_single/nn_pwa/avgall_2d.png')
 	plt.close()
 
 
 if __name__ == '__main__':
-	for i in range(1):
-		experiment_one_pwa_function(i)
-	# statistics()
+	# for i in range(5):
+	# 	experiment_one_pwa_function(i)
+	statistics()

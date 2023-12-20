@@ -19,7 +19,7 @@ from algorithms.bayesian_opt import BayesianOpt, DynamicUCB, ExpectedImprovement
 
 from utils.bb_function import GPRandomFunction
 from utils.config import Config
-from experiments.run_opt import run_experiment
+from experiments.run_opt_1d import run_experiment_1d
 
 
 opts = [
@@ -33,8 +33,9 @@ opts = [
 def experiment_one_gp_function(gp_function = 0):
 	num_trials = 5
 	threshold = 0.
-	num_seed = 10
+	num_seed = 2
 	steps = 150
+
 	# nn_function = 0
 	# beta = lambda t: 1 / np.log(t / 10 + 2)
 	beta = 2.
@@ -118,19 +119,19 @@ def experiment_one_gp_function(gp_function = 0):
 		]
 
 		for opt in opts:
-			run_experiment(
+			run_experiment_1d(
 				xs,
 				ys,
 				opt,
 				steps,
-				save_path='./results/gp_matern/%d/%s/trial_%d' % (gp_function, opt.name, i),
+				save_path='./results_single/gp_matern/%d/%s/trial_%d' % (gp_function, opt.name, i),
 			)
 
 def statistics():
 	dict = {opt:[] for opt in opts}
 
 	for func_id in range(5):
-		path = './results/gp_matern/%d' % func_id
+		path = './results_single/gp_matern/%d' % func_id
 		for opt in opts:
 			for trial in range(5):
 				result = loadmat(os.path.join(path, opt, 'trial_%d' % trial, 'result.mat'))
@@ -153,10 +154,23 @@ def statistics():
 		)
 
 	plt.legend()
-	plt.savefig('./results/gp_matern/avgall.png')
+	plt.savefig('./results_single/gp_matern/avgall.png')
+	plt.close()
+
+	for opt in opts:
+		result = dict[opt]
+		regret = np.array([r for r, _ in result])
+		num_vio = np.array([n for _, n in result])
+
+		r = np.mean(regret[:,-1])
+		v = np.mean(num_vio)
+
+		plt.scatter(r, v, label=opt)
+	plt.legend()
+	plt.savefig('./results_single/gp_matern/avgall_2d.png')
 	plt.close()
 
 if __name__ == '__main__':
-	for i in range(5):
-		experiment_one_gp_function(i)
+	# for i in range(5):
+	# 	experiment_one_gp_function(i)
 	statistics()
